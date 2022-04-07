@@ -91,12 +91,11 @@ def main():
     for num in filecontents.split():
         num_list.append(int(num))
     
-    # Find the biggest and the smallest number (remember they are sorted)
+    # Find the biggest number
     big = num_list[-1]
-    small = num_list[0]
 
     # Find the number of tail bits
-    l = math.ceil(math.log2(big/small))
+    l = math.floor(math.log2(big/len(num_list)))
     print("l",l)
 
     # Create the mask that will get the number tails
