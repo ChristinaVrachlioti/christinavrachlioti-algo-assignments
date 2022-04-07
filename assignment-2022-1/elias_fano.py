@@ -8,7 +8,7 @@ class BitArray:
     def __init__(self):
 
         # Create the array of bytes
-        self.array = []
+        self.array = bytearray()
 
         # Setup counters for bits and bytes
         self.bytes = 0
@@ -38,13 +38,16 @@ class BitArray:
             self.bytes+=1
 
         # Get the number of shifts for the new bit
-        shifts = 7-self.bits%8
+        shifts = 7-(self.bits%8)
 
         # Construct the new bitmask for the bit that is provided
         bitmask = bit << shifts
 
         # Add it to the last byte
         self.array[-1] = self.array[-1] | bitmask
+
+        # Accumulate the number of bits
+        self.bits += 1
 
     def print_bitlist(self):
         # This will print all the numbers on the list
@@ -69,9 +72,80 @@ class BitArray:
 def main():
     # The main method
 
-    print(argv)
+    # Check that exactly one argument is provided
+    if len(argv) < 2:
+        print("You need to specify a filename")
+        return
 
-    pass
+    # Try to open the file for reading 
+    try:
+        file = open(argv[1],'r')
+        filecontents = file.read()
+        file.close()
+    except:
+        print("Sorry, the file could not be read")
+        return
+
+    # Turn the numbers into a list
+    num_list = []
+    for num in filecontents.split():
+        num_list.append(int(num))
+    
+    # Find the biggest and the smallest number (remember they are sorted)
+    big = num_list[-1]
+    small = num_list[0]
+
+    # Find the number of tail bits
+    l = math.ceil(math.log2(big/small))
+    print("l",l)
+
+    # Create the mask that will get the number tails
+    tail_mask = 0
+    for i in range(l):
+        tail_mask = (tail_mask << 1)+1
+
+    # Construct the L bit array and fill it with the ends of numbers
+    # Simulteaneously transform the numbers for the next operation
+    L = BitArray()
+    for i in range(len(num_list)):
+
+        # Get the part you need
+        num_tail = num_list[i] & tail_mask
+
+        # Shrink the number
+        num_list[i] = num_list[i] >> l
+
+        # Add the tail to the bitlist
+        L.add_number(num_tail,l)
+
+    # Construct the U bit list with the number differences
+    U = BitArray()
+    last = 0
+    for i in range(len(num_list)):
+
+        # Get the number difference
+        diff = num_list[i]-last
+        last = num_list[i]
+
+        # Add 0 bits as many times as needed
+        for j in range(diff):
+            U.add_bit(0)
+
+        # Add the final 1 bit
+        U.add_bit(1)
+
+    # Display the contents of each list
+    print("L")
+    L.print_bitlist()
+    print("U")
+    U.print_bitlist()
+
+    # Print the hash value
+    m = hashlib.sha256()
+    m.update(L.array)
+    m.update(U.array)
+    digest = m.hexdigest()
+    print(digest)
 
 
 
