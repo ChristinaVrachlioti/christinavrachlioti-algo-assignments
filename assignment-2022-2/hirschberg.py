@@ -1,3 +1,6 @@
+# Import the sys functionality to read the arguments
+import sys
+
 
 # Function that constructs the F matrix from two arrays A and B
 # It is generated at the correct size, but with None values that have to be filled
@@ -62,6 +65,11 @@ def enumerate_alignments(A,B,F,W,Z,Compare,g, WW,ZZ):
     i = len(A)
     j = len(B)
 
+    # Check for lists
+    dash = '-'
+    if type(A) != str:
+        dash = ['-']
+
     if i == 0 and j == 0:
         WW.append(W)
         ZZ.append(Z)
@@ -69,11 +77,17 @@ def enumerate_alignments(A,B,F,W,Z,Compare,g, WW,ZZ):
     if i>0 and j>0:
         m = Compare(A[i-1],B[j-1])
         if F[i][j] == F[i-1][j-1]+m:
-            enumerate_alignments(A[0:i-1],B[0:j-1],F,A[i-1]+W,B[j-1]+Z,Compare,g,WW,ZZ)
+            a = A[i-1] if type(A) == str else [A[i-1]]
+            b = B[j-1] if type(B) == str else [B[j-1]]
+            enumerate_alignments(A[0:i-1],B[0:j-1],F,a+W,b+Z,Compare,g,WW,ZZ)
+            if type(A) != str:
+                return # This puts a priority on not having gaps when reading files
     if i > 0 and F[i][j] == F[i-1][j]-g:
-        enumerate_alignments(A[0:i-1],B,F,A[i-1]+W,'-'+Z,Compare,g,WW,ZZ)
+        a = A[i-1] if type(A) == str else [A[i-1]]
+        enumerate_alignments(A[0:i-1],B,F,a+W,dash+Z,Compare,g,WW,ZZ)
     if j > 0 and F[i][j] == F[i][j-1]-g:
-        enumerate_alignments(A,B[0:j-1],F,'-'+W,B[j-1]+Z,Compare,g,WW,ZZ)
+        b = B[j-1] if type(B) == str else [B[j-1]]
+        enumerate_alignments(A,B[0:j-1],F,dash+W,b+Z,Compare,g,WW,ZZ)
 
 
 # Compute allignment score
@@ -91,20 +105,26 @@ def compute_alignment_score(A,B,Compare, g):
             L[j] = max(L[j-1]+g,K[j]+g,K[j-1]+md)
     return L
 
+
 #Hirschberg
-def hirschberg(A,B,Compare,g):
+def hirschberg(A,B,Compare,g,verbose=False):
 
 
     # Define the outputs to be lists
     WW = []
     ZZ = []
 
+    # Check for lists
+    empty = ""
+    if type(A) != str:
+        empty = []
+
     if len(A) == 0:
-        WW = ['-'*len(B)]
+        WW = ['-'*len(B)] if type(A) == str else [['-']*len(B)]
         ZZ = [B]
     elif len(B) == 0:
         WW = [A]
-        ZZ = ['-'*len(A)]
+        ZZ = ['-'*len(A)] if type(A) == str else [['-']*len(A)]
     elif len(A) == 1 or len(B) == 1:
         # Create the arrays for the enumeration
         WW,ZZ = [],[]
@@ -114,7 +134,7 @@ def hirschberg(A,B,Compare,g):
         Fgenerator(A,B,F,Compare(1,1),-Compare(1,0),g,len(A),len(B))
 
         # Enumerate
-        enumerate_alignments(A,B,F,"","",Compare,g,WW,ZZ)
+        enumerate_alignments(A,B,F,empty,empty,Compare,g,WW,ZZ)
         #print(WW,ZZ)
     else:
         Ar = A[::-1]
@@ -127,8 +147,14 @@ def hirschberg(A,B,Compare,g):
         Smax = max(S)
         J = [jj for jj in range(len(S)) if Smax==S[jj]]
         for j in J:
-            WWl, ZZl = hirschberg(A[0:i],B[0:j],Compare,g)
-            WWr, ZZr = hirschberg(A[i:],B[j:],Compare,g)
+
+            # Print the i, j tupple if you are on verbose mode
+            if verbose:
+                print(str(i)+',',j)
+
+            # Do the recursion to obtain the results
+            WWl, ZZl = hirschberg(A[0:i],B[0:j],Compare,g,verbose)
+            WWr, ZZr = hirschberg(A[i:],B[j:],Compare,g,verbose)
 
             # We need to concatenate those two
             for l in range(len(WWl)):
@@ -142,27 +168,117 @@ def hirschberg(A,B,Compare,g):
                     WW.append(wwn)
                     ZZ.append(zzn)
 
+    # Remove doubles before returning
+    combined = zip(WW,ZZ)
+    c_unique = []
+    for c in combined:
+        if c not in c_unique:
+            c_unique.append(c)
+
+    # Extract the elements from that
+    WW,ZZ = [],[]
+    for w,z in c_unique:
+        WW.append(w)
+        ZZ.append(z)      
+    
     return (WW,ZZ)
 
 # A sample compare function
 def compare(a,b,match, differ):
     return match if a == b else differ
 
+
+def file_string(filename, lines):
+    # This will read a file and return it as a string
+    # If lines is checked, it will return a list of strings that
+    # correspond to the file lines
+
+    # Define variable for output
+    output = None
+
+    # Open the file and read it
+    file = open(filename,'r')
+    if lines:
+        output = [x for x in file.readlines()]
+    else:
+        output = file.read()
+    
+    # Close the file and return the result
+    file.close()
+    return output
+
 # A simple main function to see if we did good
 def main():
 
-    # Initialize the parameters
-    m, d, g = 1,-1,-2
-    A = "CTAAC"
-    B = "ACTGACG"
+    # Setup variables for the program parameters
+    nums = [0]*3
+    num_at = 0
+    strings = [""]*2
+    first_num = False
+    read_file = False
+    read_lines = False
+    verbose = False
+
+
+    # Read the arguments
+    for arg in sys.argv:
+        if not first_num:
+            verbose = verbose or (arg == '-t')
+            read_file = read_file or (arg == '-f')
+            read_lines = read_lines or (arg == '-l')
+        
+        if num_at < 3:
+            try:
+                number = int(arg)
+                first_num = True
+                nums[num_at] = number
+                num_at += 1
+            except:
+                pass
+        else:
+            if num_at < 5:
+                strings[num_at-3] = arg
+                num_at += 1
+        
+    # Now, we have parsed the arguments
+    # Time for some preprocessing
+    g, m, d = (x for x in nums)
+
+    # Check if you need to read files
+    if read_file:
+        strings = [file_string(x,read_lines) for x in strings]
+        if read_lines and False:
+            diff = abs(len(strings[0]) - len(strings[1]))
+            if len(strings[0]) > len(strings[1]):
+                strings[1].extend(['\n']*diff)
+            elif diff != 0:
+                strings[0].extend(['ff']*diff)
+
+    print(type(strings[0]))
 
     # Create proper compare function
     myCompare = lambda x,y: compare(x,y,m,d)
+    
     # Run to see some results
-    ww,zz = hirschberg(A,B,myCompare,-g)
+    ww,zz = hirschberg(strings[0],strings[1],myCompare,-g,verbose)
 
-    for i in range(len(ww)):
-        print(ww[i]+"\n"+zz[i]+"\n")
+    if not read_lines:
+        for i in range(len(ww)):
+            print(ww[i]+"\n"+zz[i]+"\n")
+    else:
+        for i in range(len(ww)):
+            for wl, zl in zip(ww[i],zz[i]):
+                if wl == zl:
+                    if wl[-1] == '\n':
+                        wl = wl[:-1]
+                        zl = zl[:-1]
+                    print("=", wl,'\n=',zl)
+                else:
+                    if wl[-1] == '\n':
+                        wl = wl[:-1]
+                    if zl[-1] == '\n':
+                        zl = zl[:-1]
+                    print("<", wl,'\n>',zl)
 
 if __name__ == "__main__":
     main()
